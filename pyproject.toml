@@ -1,0 +1,17 @@
+[project]
+name = "plook"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Holger Schmitz",email = "holger.schmitz@stfc.ac.uk"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pygnuplot (>=0.12.3,<0.13.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
