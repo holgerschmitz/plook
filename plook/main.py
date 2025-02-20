@@ -1,129 +1,122 @@
-# plook/main.py
-
 import sys
 from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QWidget,
-    QFileDialog, QVBoxLayout, QHBoxLayout,
-    QPushButton, QListWidget, QLabel, QComboBox,
-    QLineEdit, QCheckBox, QGroupBox, QFormLayout
+    QApplication,
+    QMainWindow,
+    QWidget,
+    QHBoxLayout,
+    QVBoxLayout,
+    QListWidget,
+    QLabel,
 )
-from PyQt5.QtCore import Qt
+from .ui import (
+    FileBrowserWidget, 
+    PlotWidget, 
+    PlotOptionsWidget,
+)
 
+# run with 
+# poetry run python -m plook.main
 
-class PlotViewer(QMainWindow):
+class MainWindow(QMainWindow):
+    """
+    The main window that ties it all together.
+    """
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle("Plook - Python Data Plotter")
+        self.setWindowTitle("Plook - Simple Plot Viewer")
+        self.setGeometry(100, 100, 1000, 600)
 
-        # --- Create central widget and main layout ---
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        main_layout = QVBoxLayout(central_widget)
+        main_widget = QWidget()
+        self.setCentralWidget(main_widget)
 
-        # --- File selection controls ---
-        file_layout = QHBoxLayout()
-        
-        self.open_button = QPushButton("Open File(s)")
-        self.open_button.clicked.connect(self.open_files)
-        file_layout.addWidget(self.open_button)
+        # Layout: file browser on the left, plot & options in the middle/right
+        main_layout = QHBoxLayout(main_widget)
 
-        main_layout.addLayout(file_layout)
+        # 1) File Browser Widget
+        self.file_browser = FileBrowserWidget()
+        self.file_browser.fileDoubleClicked.connect(self.on_file_selected)
 
-        # --- Selected files list ---
-        self.files_list = QListWidget()
-        main_layout.addWidget(self.files_list)
+        # 2) Plot Widget
+        self.plot_widget = PlotWidget()
 
-        # --- Plot options area ---
-        # We'll group these options in a QGroupBox for clarity
-        options_group = QGroupBox("Plot Options")
-        options_layout = QFormLayout(options_group)
+        # 3) Plot Options Widget
+        self.options_widget = PlotOptionsWidget()
+        self.options_widget.plotRequested.connect(self.on_plot_requested)
 
-        # 1) X column selection
-        self.x_column_combo = QComboBox()
-        self.x_column_combo.addItem("Column 1")  # placeholder
-        self.x_column_combo.addItem("Column 2")  # placeholder
-        options_layout.addRow(QLabel("X Column:"), self.x_column_combo)
+        # A list to keep track of selected files
+        self.selected_files_list = QListWidget()
+        self.selected_files_list.setFixedWidth(200)
 
-        # 2) Y column selection
-        self.y_column_combo = QComboBox()
-        self.y_column_combo.addItem("Column 2")  # placeholder
-        self.y_column_combo.addItem("Column 3")  # placeholder
-        options_layout.addRow(QLabel("Y Column:"), self.y_column_combo)
+        # Put the file browser on the far left
+        main_layout.addWidget(self.file_browser, stretch=1)
 
-        # 3) Plot style (lines, points, dots)
-        self.style_combo = QComboBox()
-        self.style_combo.addItems(["Lines", "Points", "Dots"])
-        options_layout.addRow(QLabel("Plot Style:"), self.style_combo)
+        # Next: a vertical container for the selected-files list & the plot area
+        center_layout = QVBoxLayout()
+        center_layout.addWidget(QLabel("Selected Files:"))
+        center_layout.addWidget(self.selected_files_list)
+        center_layout.addWidget(self.plot_widget, stretch=1)
 
-        # 4) X range (optional text fields for min, max)
-        x_range_box = QHBoxLayout()
-        self.xmin_edit = QLineEdit()
-        self.xmin_edit.setPlaceholderText("xmin")
-        self.xmax_edit = QLineEdit()
-        self.xmax_edit.setPlaceholderText("xmax")
-        x_range_box.addWidget(self.xmin_edit)
-        x_range_box.addWidget(self.xmax_edit)
-        options_layout.addRow(QLabel("X Range:"), x_range_box)
+        main_layout.addLayout(center_layout, stretch=2)
 
-        # 5) Y range (optional text fields for min, max)
-        y_range_box = QHBoxLayout()
-        self.ymin_edit = QLineEdit()
-        self.ymin_edit.setPlaceholderText("ymin")
-        self.ymax_edit = QLineEdit()
-        self.ymax_edit.setPlaceholderText("ymax")
-        y_range_box.addWidget(self.ymin_edit)
-        y_range_box.addWidget(self.ymax_edit)
-        options_layout.addRow(QLabel("Y Range:"), y_range_box)
+        # Finally, the plot options on the right
+        main_layout.addWidget(self.options_widget, stretch=0)
 
-        # 6) Log scale checkboxes
-        self.logx_check = QCheckBox("Log Scale X")
-        self.logy_check = QCheckBox("Log Scale Y")
-        log_box = QHBoxLayout()
-        log_box.addWidget(self.logx_check)
-        log_box.addWidget(self.logy_check)
-        options_layout.addRow(QLabel("Log Scale:"), log_box)
-
-        main_layout.addWidget(options_group)
-
-        # --- Plot button (optional if you want manual plotting) ---
-        self.plot_button = QPushButton("Plot")
-        self.plot_button.clicked.connect(self.plot_data)
-        main_layout.addWidget(self.plot_button)
-
-        # --- Status Bar (optional) ---
         self.statusBar().showMessage("Ready")
 
-    def open_files(self):
+    def on_file_selected(self, file_path: str):
         """
-        Opens a file dialog to select one or more data files.
-        For now, we just display them in the QListWidget.
+        Called when the user double-clicks a file in the FileBrowserWidget.
+        We add it to the 'selected_files_list' if not already present.
         """
-        files, _ = QFileDialog.getOpenFileNames(
-            self,
-            "Select Data Files",
-            "",
-            "Data Files (*.txt *.dat *.csv);;All Files (*)"
-        )
-        if files:
-            self.files_list.clear()
-            for f in files:
-                self.files_list.addItem(f)
-            # Here is where you might detect columns, etc.
+        for i in range(self.selected_files_list.count()):
+            if self.selected_files_list.item(i).text() == file_path:
+                return  # Already in the list
+        self.selected_files_list.addItem(file_path)
 
-    def plot_data(self):
+    def on_plot_requested(self):
         """
-        Placeholder slot for the 'Plot' button click.
-        You would integrate PyGnuplot or other logic here.
+        Called when the user clicks the 'Plot' button in the PlotOptionsWidget.
+        We gather the selected files and the user settings, then update the PlotWidget.
         """
-        self.statusBar().showMessage("Plotting data... (not implemented yet)")
-        # Example: read the combos, ranges, checks, etc. and call your plot logic.
+        # Collect selected files
+        selected_files = []
+        for i in range(self.selected_files_list.count()):
+            selected_files.append(self.selected_files_list.item(i).text())
+
+        # Collect user inputs from the options widget
+        x_col = self.options_widget.x_column_combo.currentText()
+        y_col = self.options_widget.y_column_combo.currentText()
+        style = self.options_widget.style_combo.currentText()
+        xmin = self.options_widget.x_min.text()
+        xmax = self.options_widget.x_max.text()
+        ymin = self.options_widget.y_min.text()
+        ymax = self.options_widget.y_max.text()
+        logx = self.options_widget.logx_check.isChecked()
+        logy = self.options_widget.logy_check.isChecked()
+
+        # Update the placeholder plot
+        self.plot_widget.update_plot(
+            files=selected_files,
+            x_col=x_col,
+            y_col=y_col,
+            style=style,
+            xmin=xmin,
+            xmax=xmax,
+            ymin=ymin,
+            ymax=ymax,
+            logx=logx,
+            logy=logy
+        )
+
+        # Update status bar
+        self.statusBar().showMessage("Plot updated")
 
 
 def main():
     app = QApplication(sys.argv)
-    viewer = PlotViewer()
-    viewer.show()
+    window = MainWindow()
+    window.show()
     sys.exit(app.exec_())
 
 
